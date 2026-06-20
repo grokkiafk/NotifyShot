@@ -155,7 +155,11 @@ class ProfileMaker(ctk.CTkToplevel):
         tmp = os.path.join(tempfile.gettempdir(), "notifyshot_frame.png")
         detector.extract_full_frame(ff, path, self._parse_time(t), tmp)
         if os.path.isfile(tmp):
-            self._set_image(Image.open(tmp).convert("RGB"))
+            self._set_image(Image.open(tmp).convert("RGB"))  # convert() грузит пиксели
+            try:
+                os.remove(tmp)                                # за собой не оставляем
+            except OSError:
+                pass
         else:
             messagebox.showerror(APP_NAME, "Не удалось вытащить кадр "
                                  "(проверьте время).", parent=self)
@@ -263,6 +267,7 @@ class App(ctk.CTk):
         self.profiles = {}
         self.preview_img = None
         self._hwnd = None
+        self._busy = False
         self.nav_btns = {}
         self.pages = {}
 
@@ -481,9 +486,10 @@ class App(ctk.CTk):
         self.open_btn.pack(side="right")
 
         self.pbar = ctk.CTkProgressBar(f, progress_color=PINK, fg_color=FIELD,
-                                       height=8, corner_radius=6)
+                                       height=16, corner_radius=8,
+                                       indeterminate_speed=1.4)
         self.pbar.set(0)
-        self.pbar.pack(fill="x", pady=(6, 4))
+        self.pbar.pack(fill="x", pady=(8, 4))
         self.status = ctk.CTkLabel(f, text="Готов.", text_color=MUT, anchor="w")
         self.status.pack(fill="x")
         self.log = ctk.CTkTextbox(f, height=84, fg_color=FIELD, text_color=FG,
@@ -694,6 +700,7 @@ class App(ctk.CTk):
 
         self._log_clear()
         self.cancel_evt.clear()
+        self._bar_reset()
         self.pbar.set(0)
         self.start_btn.configure(state="disabled")
         self.cancel_btn.configure(state="normal")
@@ -715,6 +722,27 @@ class App(ctk.CTk):
         except Exception as e:
             self.q.put(("error", str(e)))
 
+    def _update_progress(self, x):
+        if x < 0:                                  # неизвестная длительность
+            if not self._busy:
+                self._busy = True
+                self.pbar.configure(mode="indeterminate")
+                self.pbar.start()
+            self._set_status("Анализ видео…", FG)
+        else:
+            if self._busy:
+                self._busy = False
+                self.pbar.stop()
+                self.pbar.configure(mode="determinate")
+            self.pbar.set(max(0.0, min(1.0, x)))
+            self._set_status(f"Обработка… {int(x * 100)}%", FG)
+
+    def _bar_reset(self):
+        if self._busy:
+            self.pbar.stop()
+            self._busy = False
+        self.pbar.configure(mode="determinate")
+
     def _cancel(self):
         self.cancel_evt.set()
         self._set_status("Останавливаю…", WARN)
@@ -724,7 +752,7 @@ class App(ctk.CTk):
             while True:
                 kind, payload = self.q.get_nowait()
                 if kind == "progress":
-                    self.pbar.set(max(0.0, min(1.0, payload)))
+                    self._update_progress(payload)
                 elif kind == "log":
                     self._log(payload)
                 elif kind == "done":
@@ -736,6 +764,7 @@ class App(ctk.CTk):
         self.after(100, self._poll)
 
     def _finish(self, saved, error=None):
+        self._bar_reset()
         self.start_btn.configure(state="normal")
         self.cancel_btn.configure(state="disabled")
         if error:

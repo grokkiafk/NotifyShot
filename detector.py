@@ -133,8 +133,12 @@ def keyframe_times(ffprobe, video):
     return times
 
 
-def extract_keyframe_crops(ffmpeg, video, roi, tmpdir, should_cancel):
-    """Decode ONLY keyframes, crop to ROI band, save grayscale PNGs."""
+def extract_keyframe_crops(ffmpeg, video, roi, tmpdir, should_cancel, on_count=None):
+    """Decode ONLY keyframes, crop to ROI band, save grayscale PNGs.
+
+    on_count(n) is called periodically with the number of frames written so
+    far, so the caller can show real progress during this (slow) step.
+    """
     for f in glob.glob(os.path.join(tmpdir, "k_*.png")):
         os.remove(f)
     X, Y, W, H = roi
@@ -151,11 +155,19 @@ def extract_keyframe_crops(ffmpeg, video, roi, tmpdir, should_cancel):
             except subprocess.TimeoutExpired:
                 p.kill()
             return None
+        if on_count:
+            try:
+                on_count(len(glob.glob(os.path.join(tmpdir, "k_*.png"))))
+            except Exception:
+                pass
         try:
             p.wait(0.3)
         except subprocess.TimeoutExpired:
             pass
-    return sorted(glob.glob(os.path.join(tmpdir, "k_*.png")))
+    out = sorted(glob.glob(os.path.join(tmpdir, "k_*.png")))
+    if on_count:
+        on_count(len(out))
+    return out
 
 
 def extract_full_frame(ffmpeg, video, t, out_path):
@@ -242,33 +254,39 @@ def _event_offsets(n):
 
 def detect_video(ffmpeg, ffprobe, video, times, profile, out_dir, threshold,
                  frames_per_event, tag, progress, log, should_cancel,
-                 base_done, total_kf):
+                 base_done, total_units):
+    # Each video owns 2*n progress units: the first n cover keyframe extraction,
+    # the next n cover template matching — so the bar moves through both phases.
+    n0 = len(times)
+    nxt = base_done + 2 * n0
     tmp = tempfile.mkdtemp(prefix="notifyshot_")
     saved = []
     try:
         size = video_size(ffprobe, video)
         if not size:
             log(f"⚠ Не удалось прочитать видео: {os.path.basename(video)}")
-            return saved, base_done
+            return saved, nxt
         roi, tpls = compute_roi_and_templates(profile, *size)
 
         log(f"Распаковка кадров: {os.path.basename(video)} …")
-        pngs = extract_keyframe_crops(ffmpeg, video, roi, tmp, should_cancel)
+        pngs = extract_keyframe_crops(
+            ffmpeg, video, roi, tmp, should_cancel,
+            on_count=lambda c: progress((base_done + min(c, n0)) / total_units))
         if pngs is None:
-            return saved, base_done
+            return saved, nxt
         n = min(len(pngs), len(times))
         if n == 0:
-            return saved, base_done
+            return saved, nxt
 
         log(f"Поиск уведомлений ({n} ключевых кадров) …")
         scores = []
         for i in range(n):
             if should_cancel and should_cancel():
-                return saved, base_done
+                return saved, nxt
             img = cv2.imread(pngs[i], cv2.IMREAD_GRAYSCALE)
             scores.append(best_score(img, tpls) if img is not None else -1.0)
-            if (i & 7) == 0:
-                progress((base_done + i) / max(1, total_kf))
+            if (i & 3) == 0:
+                progress((base_done + n0 + i) / total_units)
 
         events = cluster(times[:n], scores, threshold)
         log(f"Найдено событий: {len(events)} — сохраняю кадры …")
@@ -285,7 +303,7 @@ def detect_video(ffmpeg, ffprobe, video, times, profile, out_dir, threshold,
                 extract_full_frame(ffmpeg, video, t + off, path)
                 if os.path.isfile(path):
                     saved.append(path)
-        return saved, base_done + n
+        return saved, nxt
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -311,9 +329,10 @@ def run(videos, profile, out_dir, sensitivity="med", threshold=None,
         threshold = round(base + offset, 3)
     os.makedirs(out_dir, exist_ok=True)
 
+    progress(-1.0)  # «занят»: анимированная полоса на время анализа
     log("Анализ видео …")
     times_all = [keyframe_times(ffprobe, v) for v in videos]
-    total_kf = max(1, sum(len(t) for t in times_all))
+    total_units = max(1, sum(2 * len(t) for t in times_all))
 
     base, all_saved = 0, []
     for vi, v in enumerate(videos):
@@ -322,7 +341,7 @@ def run(videos, profile, out_dir, sensitivity="med", threshold=None,
         saved, base = detect_video(
             ffmpeg, ffprobe, v, times_all[vi], profile, out_dir, threshold,
             frames_per_event, f"v{vi + 1}", progress, log, should_cancel,
-            base, total_kf)
+            base, total_units)
         log(f"✓ {os.path.basename(v)} → {len(saved)} кадр(ов)")
         all_saved += saved
     progress(1.0)
@@ -378,7 +397,7 @@ def main():
 
     saved = run(a.videos, a.profile, a.out, sensitivity=a.sensitivity,
                 threshold=a.threshold, frames_per_event=a.frames_per_event,
-                progress=lambda x: print(f"\r{x*100:5.1f}%", end="", flush=True),
+                progress=lambda x: print(f"\r{max(0.0, x)*100:5.1f}%", end="", flush=True),
                 log=lambda s: print("\n" + s))
     print(f"\nГотово: сохранено {len(saved)} кадр(ов) в {os.path.abspath(a.out)}")
 
