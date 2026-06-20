@@ -15,7 +15,11 @@ where pyinstaller >nul 2>nul || (
 
 echo [NotifyShot] Сборка...
 pyinstaller --noconfirm --onefile --windowed --name NotifyShot ^
+  --icon "assets\notifyshot.ico" ^
   --add-data "templates;templates" ^
+  --add-data "assets\notifyshot.ico;assets" ^
+  --collect-all customtkinter ^
+  --collect-all darkdetect ^
   app.py || goto :err
 
 REM Положим ffmpeg рядом с exe, если он есть в bin\

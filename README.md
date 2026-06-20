@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" width="92" alt="NotifyShot"/>
+</p>
+
 # NotifyShot
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
@@ -8,6 +12,8 @@
 
 **Автоматическая нарезка скриншотов по игровому уведомлению из видео.**
 
+![интерфейс NotifyShot](assets/ui_majestic.png)
+
 Кидаешь длинную запись игры → выбираешь, что искать (например «Вы реанимировали»)
 → получаешь папку со скриншотами, по одному (или несколько) на каждое срабатывание
 уведомления. Удобно для отчётов, монтажа, статистики.
@@ -15,7 +21,7 @@
 Работает на любом разрешении записи (720p / 1080p / 1440p…) и не зависит от того,
 в каком углу экрана появляется плашка.
 
-*Пример: из ~6.4 часов записи автоматически вытащено 43 момента ресны —*
+*Пример: из ~6.4 часов записи автоматически вытащено 43 момента оказания ПМП —*
 ![пример результата](assets/example_output.png)
 
 ---
@@ -34,7 +40,7 @@
 1. Скачайте релиз, распакуйте архив.
 2. Запустите **`NotifyShot.exe`**.
 3. **Видео** → добавьте файлы или папку.
-4. **Что искать** → выберите профиль (в комплекте — «Ресна — Majestic»).
+4. **Что искать** → выберите профиль (в комплекте — «Оказание ПМП — Majestic»).
 5. **Куда сохранять** → папка для скриншотов.
 6. **СТАРТ**. По окончании предложит открыть папку с результатами.
 
@@ -73,8 +79,8 @@ build.bat                   :: соберёт dist\NotifyShot.exe
 ### CLI (для тестов)
 
 ```bat
-python detector.py "video.mp4" --profile templates\revive_majestic.json --out out
-python detector.py "video.mp4" --profile templates\revive_majestic.json --scan   :: подбор порога
+python detector.py "video.mp4" --profile templates\pmp_majestic.json --out out
+python detector.py "video.mp4" --profile templates\pmp_majestic.json --scan   :: подбор порога
 ```
 
 ## Требования
