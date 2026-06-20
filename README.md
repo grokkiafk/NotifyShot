@@ -1,5 +1,11 @@
 # NotifyShot
 
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![OpenCV](https://img.shields.io/badge/OpenCV-template%20matching-5C3EE8?logo=opencv&logoColor=white)](https://opencv.org/)
+[![ffmpeg](https://img.shields.io/badge/ffmpeg-keyframes-007808?logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
+[![Platform](https://img.shields.io/badge/Windows-10%2F11-0078D6?logo=windows&logoColor=white)](#)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
 **Автоматическая нарезка скриншотов по игровому уведомлению из видео.**
 
 Кидаешь длинную запись игры → выбираешь, что искать (например «Вы реанимировали»)
