@@ -4,6 +4,7 @@
 
 # NotifyShot
 
+[![Скачать релиз](https://img.shields.io/github/v/release/grokkiafk/NotifyShot?label=%E2%AC%87%EF%B8%8F%20%D0%A1%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C&color=E8185A)](https://github.com/grokkiafk/NotifyShot/releases/latest)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![OpenCV](https://img.shields.io/badge/OpenCV-template%20matching-5C3EE8?logo=opencv&logoColor=white)](https://opencv.org/)
 [![ffmpeg](https://img.shields.io/badge/ffmpeg-keyframes-007808?logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
