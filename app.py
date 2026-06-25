@@ -21,12 +21,13 @@ import customtkinter as ctk
 from PIL import Image
 
 import detector
+import scoring
 
 if os.name == "nt":
     import ctypes
 
 APP_NAME = "NotifyShot"
-VERSION = "v1.0"
+VERSION = "v1.2"
 GITHUB_URL = "https://github.com/grokkiafk/NotifyShot"
 VIDEO_FILETYPES = [("Видео", " ".join("*" + e for e in detector.VIDEO_EXTS)),
                    ("Все файлы", "*.*")]
@@ -353,7 +354,8 @@ class App(ctk.CTk):
         b2.pack(side="left")
         self._bind_drag(side, brand, b1, b2)
 
-        for name, label in (("search", "Поиск"), ("profiles", "Профили"),
+        for name, label in (("search", "Поиск"), ("report", "Отчёт медика"),
+                            ("profiles", "Профили"),
                             ("settings", "Настройки"), ("about", "О программе")):
             b = ctk.CTkButton(side, text=label, anchor="w", height=42,
                               fg_color="transparent", hover_color="#1F1F1F",
@@ -400,6 +402,7 @@ class App(ctk.CTk):
         self.holder.pack(fill="both", expand=True, padx=22, pady=(0, 18))
 
         self.pages["search"] = self._page_search()
+        self.pages["report"] = self._page_report()
         self.pages["profiles"] = self._page_profiles()
         self.pages["settings"] = self._page_settings()
         self.pages["about"] = self._page_about()
@@ -496,6 +499,33 @@ class App(ctk.CTk):
                                   corner_radius=10, font=("Consolas", 10))
         self.log.pack(fill="both", expand=True, pady=(6, 0))
         self.log.configure(state="disabled")
+        return f
+
+    # ---- страница: Отчёт медика ------------------------------------------- #
+    def _page_report(self):
+        f = self._page("Отчёт медика")
+        ctk.CTkLabel(f, text="Разложит скрины по папкам (Таблетки · Вакцинация · "
+                     "ПМП → День/Ночь) и посчитает баллы. День/ночь для ПМП "
+                     "определяется по игровым часам в кадре автоматически.",
+                     text_color=MUT, anchor="w", justify="left",
+                     wraplength=560).pack(fill="x", pady=(0, 6))
+        ctk.CTkLabel(f, text="Берёт видео и папку сохранения со вкладки «Поиск».",
+                     text_color=DIM, anchor="w").pack(fill="x", pady=(0, 12))
+        self.r_btn = ctk.CTkButton(
+            f, text="📋  Сформировать отчёт", command=self._start_report,
+            fg_color=PINK, hover_color=PINKH, text_color=WHITE, font=self.f_btn,
+            height=46, width=250, corner_radius=10)
+        self.r_btn.pack(anchor="w")
+        self.r_pbar = ctk.CTkProgressBar(f, progress_color=PINK, fg_color=FIELD,
+                                         height=14, corner_radius=7)
+        self.r_pbar.set(0)
+        self.r_pbar.pack(fill="x", pady=(14, 4))
+        self.r_status = ctk.CTkLabel(f, text="", text_color=MUT, anchor="w")
+        self.r_status.pack(fill="x")
+        self.r_log = ctk.CTkTextbox(f, fg_color=FIELD, text_color=FG,
+                                    corner_radius=10, font=("Consolas", 11))
+        self.r_log.pack(fill="both", expand=True, pady=(6, 0))
+        self.r_log.configure(state="disabled")
         return f
 
     # ---- страница: Профили ------------------------------------------------ #
@@ -722,6 +752,64 @@ class App(ctk.CTk):
         except Exception as e:
             self.q.put(("error", str(e)))
 
+    # ---- отчёт медика ----------------------------------------------------- #
+    def _start_report(self):
+        if self.worker and self.worker.is_alive():
+            return
+        videos = list(self.vids.get(0, "end"))
+        if not videos:
+            messagebox.showwarning(APP_NAME, "Добавьте видео на вкладке «Поиск».")
+            return
+        out = self.out_var.get().strip()
+        if not out:
+            messagebox.showwarning(APP_NAME, "Укажите папку сохранения на вкладке «Поиск».")
+            return
+        self._rlog_clear()
+        self.cancel_evt.clear()
+        self.r_pbar.set(0)
+        self.r_btn.configure(state="disabled")
+        self.r_status.configure(text="Работаю…", text_color=FG)
+        self.worker = threading.Thread(target=self._work_report,
+                                       args=(videos, out), daemon=True)
+        self.worker.start()
+
+    def _work_report(self, videos, out):
+        try:
+            counts = scoring.run_report(
+                videos, out,
+                progress=lambda x: self.q.put(("rprog", x)),
+                log=lambda s: self.q.put(("rlog", s)),
+                should_cancel=self.cancel_evt.is_set)
+            self.q.put(("rdone", (counts, out)))
+        except Exception as e:
+            self.q.put(("rerror", str(e)))
+
+    def _finish_report(self, payload, error=None):
+        self.r_btn.configure(state="normal")
+        if error:
+            self.r_status.configure(text="Ошибка.", text_color=WARN)
+            messagebox.showerror(APP_NAME, error)
+            return
+        counts, out = payload
+        self.r_pbar.set(1.0)
+        self.r_status.configure(text="Готово! Отчёт сформирован.", text_color=OK)
+        if messagebox.askyesno(APP_NAME, "Отчёт готов. Открыть папку?"):
+            try:
+                os.startfile(out)
+            except Exception:
+                pass
+
+    def _rlog(self, s):
+        self.r_log.configure(state="normal")
+        self.r_log.insert("end", s.rstrip() + "\n")
+        self.r_log.see("end")
+        self.r_log.configure(state="disabled")
+
+    def _rlog_clear(self):
+        self.r_log.configure(state="normal")
+        self.r_log.delete("1.0", "end")
+        self.r_log.configure(state="disabled")
+
     def _update_progress(self, x):
         if x < 0:                                  # неизвестная длительность
             if not self._busy:
@@ -759,6 +847,16 @@ class App(ctk.CTk):
                     self._finish(payload)
                 elif kind == "error":
                     self._finish(None, error=payload)
+                elif kind == "rprog":
+                    self.r_pbar.set(max(0.0, min(1.0, payload)))
+                    self.r_status.configure(
+                        text=f"Обработка… {int(payload*100)}%", text_color=FG)
+                elif kind == "rlog":
+                    self._rlog(payload)
+                elif kind == "rdone":
+                    self._finish_report(payload)
+                elif kind == "rerror":
+                    self._finish_report(None, error=payload)
         except queue.Empty:
             pass
         self.after(100, self._poll)

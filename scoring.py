@@ -121,7 +121,8 @@ def run_report(videos, out_dir, ffmpeg=None, ffprobe=None,
             step += 1
             progress(step / total_steps)
 
-    _write_report(out_dir, counts, rows)
+    report_text = _write_report(out_dir, counts, rows)
+    log(report_text)
     progress(1.0)
     return counts
 
@@ -153,7 +154,7 @@ def _write_report(out_dir, c, rows):
         w = csv.writer(f, delimiter=";")
         w.writerow(["Категория", "Файл", "Источник", "Тайминг в видео", "Игр.час", "День/Ночь"])
         w.writerows(rows)
-    print("\n".join(lines))
+    return "\n".join(lines)
 
 
 def main():
