@@ -69,6 +69,7 @@ def run_report(videos, out_dir, ffmpeg=None, ffprobe=None,
         if os.path.isfile(p):
             profs.append((detector.load_profile(p), folder, key))
     clock_tpl = clock.load_templates()
+    dow_tpls = clock.load_dow_templates()
 
     for sub in ("Таблетки", "Вакцинация", os.path.join("ПМП", "День"),
                 os.path.join("ПМП", "Ночь"), os.path.join("ПМП", "Время не распознано")):
@@ -96,7 +97,8 @@ def run_report(videos, out_dir, ffmpeg=None, ffprobe=None,
                     img = cv2.imdecode(np.fromfile(frame_path, np.uint8), cv2.IMREAD_COLOR) \
                         if os.path.isfile(frame_path) else None
                     hour = clock.read_hour(img, clock_tpl) if img is not None else None
-                    night = clock.is_night(hour)
+                    weekend = clock.is_weekend(img, dow_tpls) if img is not None else False
+                    night = clock.is_night(hour, weekend)
                     if night is None:
                         sub, cat = os.path.join("ПМП", "Время не распознано"), "pmp_unknown"
                         gtime = "??"

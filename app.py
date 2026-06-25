@@ -27,7 +27,7 @@ if os.name == "nt":
     import ctypes
 
 APP_NAME = "NotifyShot"
-VERSION = "v1.2"
+VERSION = "v1.2.1"
 GITHUB_URL = "https://github.com/grokkiafk/NotifyShot"
 VIDEO_FILETYPES = [("Видео", " ".join("*" + e for e in detector.VIDEO_EXTS)),
                    ("Все файлы", "*.*")]

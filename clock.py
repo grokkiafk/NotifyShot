@@ -103,6 +103,41 @@ def is_night(hour, weekend=False):
     return not (start <= hour < (24 if weekend else 22))
 
 
+# --- день недели: выходной? (Суббота/Воскресенье) -------------------------- #
+DOW_BOX = (314, 972, 480, 998)
+DOW_SCALES = (0.9, 0.95, 1.0, 1.05, 1.1)
+
+
+def load_dow_templates(clock_dir=None):
+    clock_dir = clock_dir or _clock_dir()
+    out = []
+    for nm in ("dow_sat.png", "dow_sun.png"):
+        p = os.path.join(clock_dir, nm)
+        if os.path.isfile(p):
+            im = cv2.imdecode(np.fromfile(p, np.uint8), cv2.IMREAD_GRAYSCALE)
+            if im is not None:
+                out.append(im)
+    return out
+
+
+def is_weekend(frame_bgr, dow_tpls, threshold=0.66):
+    """True, если в кадре день недели = Суббота/Воскресенье."""
+    if not dow_tpls:
+        return False
+    h, w = frame_bgr.shape[:2]
+    sx, sy = w / REF_W, h / REF_H
+    x0, y0, x1, y1 = DOW_BOX
+    g = cv2.cvtColor(frame_bgr[int(y0*sy):int(y1*sy), int(x0*sx):int(x1*sx)],
+                     cv2.COLOR_BGR2GRAY)
+    best = 0.0
+    for t in dow_tpls:
+        for s in DOW_SCALES:
+            ts = cv2.resize(t, None, fx=sx*s, fy=sy*s, interpolation=cv2.INTER_AREA)
+            if ts.shape[0] <= g.shape[0] and ts.shape[1] <= g.shape[1]:
+                best = max(best, float(cv2.matchTemplate(g, ts, cv2.TM_CCOEFF_NORMED).max()))
+    return best >= threshold
+
+
 # --------------------------------------------------------------------------- #
 def _build(out_dir):
     """Пересобрать эталоны цифр из размеченных кадров C:\\tmp\\hf_*.png."""
