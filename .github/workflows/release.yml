@@ -1,0 +1,89 @@
+name: Build & Release
+
+# Собирает NotifyShot.exe на серверах GitHub, подписывает артефакты
+# (build provenance / Sigstore) и публикует релиз. Запускается при пуше тега vX.Y.Z.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Тег релиза, напр. v1.3.0'
+        required: true
+
+permissions:
+  contents: write        # создать релиз
+  id-token: write        # подпись (OIDC)
+  attestations: write    # build provenance
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Определить тег
+        id: meta
+        shell: pwsh
+        run: |
+          $tag = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME } else { '${{ github.event.inputs.tag }}' }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "zip=NotifyShot-$tag-win64.zip" >> $env:GITHUB_OUTPUT
+
+      - name: Зависимости
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Скачать ffmpeg
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip' -OutFile ff.zip
+          Expand-Archive ff.zip -DestinationPath ff
+          $dir = (Get-ChildItem ff -Recurse -Filter ffmpeg.exe | Select-Object -First 1).Directory.FullName
+          New-Item -ItemType Directory -Force bin | Out-Null
+          Copy-Item "$dir\ffmpeg.exe","$dir\ffprobe.exe" bin\
+
+      - name: Собрать .exe
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --name NotifyShot `
+            --icon assets/notifyshot.ico `
+            --add-data "templates;templates" `
+            --add-data "assets/notifyshot.ico;assets" `
+            --collect-all customtkinter --collect-all darkdetect `
+            app.py
+
+      - name: Упаковать релиз
+        shell: pwsh
+        run: |
+          $zip = '${{ steps.meta.outputs.zip }}'
+          New-Item -ItemType Directory -Force pkg/NotifyShot/bin | Out-Null
+          Copy-Item dist/NotifyShot.exe pkg/NotifyShot/
+          Copy-Item bin/ffmpeg.exe,bin/ffprobe.exe pkg/NotifyShot/bin/
+          Compress-Archive -Path pkg/NotifyShot -DestinationPath $zip -CompressionLevel Optimal
+
+      - name: Подпись (build provenance)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/NotifyShot.exe
+            ${{ steps.meta.outputs.zip }}
+
+      - name: Опубликовать релиз
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: NotifyShot ${{ steps.meta.outputs.tag }}
+          generate_release_notes: true
+          files: ${{ steps.meta.outputs.zip }}
+          body: |
+            Собрано на серверах GitHub Actions и подписано (build provenance, Sigstore).
+            Проверка подлинности:
+            ```
+            gh attestation verify NotifyShot.exe --repo grokkiafk/NotifyShot
+            ```

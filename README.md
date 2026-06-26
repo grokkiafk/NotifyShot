@@ -13,6 +13,12 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/grokkiafk/NotifyShot/actions/workflows/release.yml"><img src="https://github.com/grokkiafk/NotifyShot/actions/workflows/release.yml/badge.svg" alt="Build"/></a>
+  <img src="https://img.shields.io/badge/сборка-GitHub%20Actions-2088FF?logo=githubactions&logoColor=white" alt="GitHub Actions"/>
+  <img src="https://img.shields.io/badge/подпись-build%20provenance-3FB950?logo=sigstore&logoColor=white" alt="Signed"/>
+</p>
+
+<p align="center">
   <img src="assets/ui_majestic.png" width="640" alt="Интерфейс NotifyShot"/>
 </p>
 
@@ -191,6 +197,18 @@ build.bat         сборка в один .exe (PyInstaller)
 
 - **Релиз:** Windows 10/11, больше ничего не нужно (ffmpeg внутри).
 - **Из исходников:** Python 3.10+, пакеты `opencv-python`, `numpy`, `Pillow`, `customtkinter` (+ `tkinter` из стандартной поставки). Ядро (`detector.py`) кроссплатформенное — на Linux/Mac нужен системный ffmpeg.
+
+## Подлинность сборки
+
+Релизы собираются **на серверах GitHub Actions** прямо из этого открытого кода (см. [`.github/workflows/release.yml`](.github/workflows/release.yml)) и **подписываются** механизмом build provenance (Sigstore). Это даёт криптографическую гарантию, что скачанный `.exe` собран именно из исходников этого репозитория, а не подменён.
+
+Проверить подлинность скачанного файла (нужен [GitHub CLI](https://cli.github.com/)):
+
+```bash
+gh attestation verify NotifyShot.exe --repo grokkiafk/NotifyShot
+```
+
+История версий — в [CHANGELOG.md](CHANGELOG.md).
 
 ## Лицензия
 
